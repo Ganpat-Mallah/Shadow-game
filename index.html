@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Escape</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #fafafa;
+        }
+        .game-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            background-color: #f0f0f0;
+            overflow: hidden;
+            border: 2px solid black;
+        }
+        .player {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: green;
+        }
+        .shadow {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: black;
+            border-radius: 50%;
+        }
+        .endpoint {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: blue;
+        }
+        .game-over, .win-message {
+            display: none;
+            text-align: center;
+            font-size: 24px;
+            color: red;
+        }
+        .restart, .next-level {
+            display: none;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .fire-btn {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 40px;
+            font-size: 16px;
+            background-color: #ff5733;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .timer, .level-counter {
+            font-size: 20px;
+            margin-top: 10px;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <div class="player" id="player"></div>
+    <div class="endpoint" id="endpoint"></div>
+    <div id="game-over-message" class="game-over">Game Over</div>
+    <div id="win-message" class="win-message">You Won!</div>
+</div>
+
+<div class="controls">
+    <div id="timer" class="timer">Time Left: 10s</div>
+    <div id="level-counter" class="level-counter">Level: 1</div>
+    <button id="restart" class="restart" onclick="restartGame()">Restart</button>
+    <button id="next-level" class="next-level" onclick="nextLevel()">Next Level</button>
+</div>
+
+<!-- Fire Button -->
+<button id="fire-btn" class="fire-btn">Fire</button> 
+
+<script>
+    const player = document.getElementById('player');
+    const gameContainer = document.querySelector('.game-container');
+    const gameOverMessage = document.getElementById('game-over-message');
+    const winMessage = document.getElementById('win-message');
+    const timerDisplay = document.getElementById('timer');
+    const levelCounter = document.getElementById('level-counter');
+    const restartButton = document.getElementById('restart');
+    const nextLevelButton = document.getElementById('next-level');
+    const endpoint = document.getElementById('endpoint');
+    const fireButton = document.getElementById('fire-btn');  // Fire button
+
+    let level = localStorage.getItem('level') ? parseInt(localStorage.getItem('level')) : 1;
+    let timeLeft = calculateTimeForLevel(level);
+    let gameInterval, timerInterval;
+    let playerPosition = { x: 0, y: 0 };
+    let shadows = [];
+    let bullets = [];  // Array to store bullets
+    let isGameOver = false;
+    let isGameWon = false;
+
+    let offsetX = 0, offsetY = 0;
+
+    function calculateTimeForLevel(currentLevel) {
+        return 10 + (currentLevel - 1) * 2;
+    }
+
+    function onTouchStart(event) {
+        const touch = event.touches[0];
+        offsetX = touch.pageX - playerPosition.x;
+        offsetY = touch.pageY - playerPosition.y;
+    }
+
+    function onTouchMove(event) {
+        if (isGameOver || isGameWon) return;
+
+        const touch = event.touches[0];
+        const newX = touch.pageX - offsetX;
+        const newY = touch.pageY - offsetY;
+
+        const gameWidth = gameContainer.offsetWidth;
+        const gameHeight = gameContainer.offsetHeight;
+
+        if (newX >= 0 && newX <= gameWidth - 30) {
+            playerPosition.x = newX;
+        }
+        if (newY >= 0 && newY <= gameHeight - 30) {
+            playerPosition.y = newY;
+        }
+
+        player.style.top = `${playerPosition.y}px`;
+        player.style.left = `${playerPosition.x}px`;
+
+        checkCollision();
+        checkEndpoint();
+    }
+
+    function onTouchEnd() {
+        // Optional: Handle touch end if needed
+    }
+
+    gameContainer.addEventListener('touchstart', onTouchStart);
+    gameContainer.addEventListener('touchmove', onTouchMove);
+    gameContainer.addEventListener('touchend', onTouchEnd);
+
+    function createShadows(numShadows) {
+        shadows.forEach(shadow => shadow.element.remove());
+        shadows = [];
+
+        for (let i = 0; i < numShadows; i++) {
+            const shadow = document.createElement('div');
+            shadow.classList.add('shadow');
+            shadow.style.left = `${Math.random() * 360}px`;
+            shadow.style.top = `${Math.random() * 360}px`;
+            gameContainer.appendChild(shadow);
+            shadows.push({
+                element: shadow,
+                x: parseFloat(shadow.style.left),
+                y: parseFloat(shadow.style.top),
+                direction: { x: Math.random() > 0.5 ? 1 : -1, y: Math.random() > 0.5 ? 1 : -1 },
+                speed: 1
+            });
+        }
+    }
+
+    function moveShadows() {
+        const gameWidth = gameContainer.offsetWidth;
+        const gameHeight = gameContainer.offsetHeight;
+
+        shadows.forEach(shadow => {
+            shadow.x += shadow.speed * shadow.direction.x;
+            shadow.y += shadow.speed * shadow.direction.y;
+
+            if (shadow.x <= 0 || shadow.x >= gameWidth - 30) {
+                shadow.direction.x *= -1;
+            }
+            if (shadow.y <= 0 || shadow.y >= gameHeight - 30) {
+                shadow.direction.y *= -1;
+            }
+
+            shadow.element.style.left = `${shadow.x}px`;
+            shadow.element.style.top = `${shadow.y}px`;
+        });
+    }
+
+    function checkCollision() {
+        if (isGameOver || isGameWon) return;
+
+        const playerRect = player.getBoundingClientRect();
+
+        shadows.forEach(shadow => {
+            const shadowRect = shadow.element.getBoundingClientRect();
+
+            if (
+                playerRect.left < shadowRect.right &&
+                playerRect.right > shadowRect.left &&
+                playerRect.top < shadowRect.bottom &&
+                playerRect.bottom > shadowRect.top
+            ) {
+                gameOver();
+            }
+        });
+    }
+
+    function checkEndpoint() {
+        const playerRect = player.getBoundingClientRect();
+        const endpointRect = endpoint.getBoundingClientRect();
+
+        if (
+            playerRect.left < endpointRect.right &&
+            playerRect.right > endpointRect.left &&
+            playerRect.top < endpointRect.bottom &&
+            playerRect.bottom > endpointRect.top
+        ) {
+            youWon();
+        }
+    }
+
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            timerDisplay.textContent = `Time Left: ${timeLeft}s`;
+
+            if (timeLeft <= 0) {
+                gameOver();
+            }
+        }, 1000);
+    }
+
+    function gameOver() {
+        if (isGameOver || isGameWon) return;
+
+        isGameOver = true;
+        clearInterval(gameInterval);
+        clearInterval(timerInterval);
+        gameOverMessage.style.display = 'block';
+        restartButton.style.display = 'block';
+    }
+
+    function youWon() {
+        if (isGameOver || isGameWon) return;
+
+        isGameWon = true;
+        clearInterval(gameInterval);
+        clearInterval(timerInterval);
+        winMessage.style.display = 'block';
+        nextLevelButton.style.display = 'inline-block';
+    }
+
+    function nextLevel() {
+        level++;
+        timeLeft = calculateTimeForLevel(level);
+        levelCounter.textContent = `Level: ${level}`;
+        localStorage.setItem('level', level);
+
+        createShadows(level + 4);
+        endpoint.style.left = `${Math.random() * 370}px`;
+        endpoint.style.top = `${Math.random() * 370}px`;
+
+        startTimer();
+        gameInterval = setInterval(moveShadows, 20);
+
+        winMessage.style.display = 'none';
+        nextLevelButton.style.display = 'none';
+        resetGame();
+    }
+    
+    function resetGame() {
+        playerPosition.x = 0;
+        playerPosition.y = 0;
+        player.style.top = `${playerPosition.y}px`;
+        player.style.left = `${playerPosition.x}px`;
+        isGameOver = false;
+        isGameWon = false;
+    }
+
+    function restartGame() {
+        timeLeft = calculateTimeForLevel(level);
+        createShadows(level + 4);
+        endpoint.style.left = `${Math.random() * 370}px`;
+        endpoint.style.top = `${Math.random() * 370}px`;
+
+        startTimer();
+        gameInterval = setInterval(moveShadows, 20);
+
+        gameOverMessage.style.display = 'none';
+        restartButton.style.display = 'none';
+        resetGame();
+    }
+
+    function startGame() {
+        createShadows(level + 4);
+        levelCounter.textContent = `Level: ${level}`;
+        startTimer();
+        gameInterval = setInterval(moveShadows, 20);
+        endpoint.style.left = `${Math.random() * 370}px`;
+        endpoint.style.top = `${Math.random() * 370}px`;
+    }
+
+    // Fire bullet when button is clicked
+    fireButton.addEventListener('click', () => {
+        if (level >= 30) {
+            fireBullet();
+        }
+    });
+
+    function fireBullet() {
+    const bullet = document.createElement('div');
+    bullet.style.position = 'absolute';
+    bullet.style.width = '10px';
+    bullet.style.height = '5px';
+    bullet.style.backgroundColor = 'red';
+    bullet.style.left = `${playerPosition.x + 15}px`; // Starting position of the bullet near the player
+    bullet.style.top = `${playerPosition.y + 10}px`; // Bullet should be fired from player's position
+    gameContainer.appendChild(bullet);
+
+    bullets.push(bullet);
+
+    // Move bullet to the right
+    let bulletInterval = setInterval(() => {
+        bullet.style.left = `${parseFloat(bullet.style.left) + 5}px`;
+
+        // Check collision with shadows
+        shadows.forEach((shadow, index) => {
+            const bulletRect = bullet.getBoundingClientRect();
+            const shadowRect = shadow.element.getBoundingClientRect();
+
+            if (
+                bulletRect.left < shadowRect.right &&
+                bulletRect.right > shadowRect.left &&
+                bulletRect.top < shadowRect.bottom &&
+                bulletRect.bottom > shadowRect.top
+            ) {
+                // Collision detected: Remove shadow and bullet
+                shadow.element.remove();
+                shadows.splice(index, 1); // Remove shadow from array
+                clearInterval(bulletInterval);
+                bullet.remove();
+
+                // Optional: Increment score
+                updateScore();
+            }
+        });
+
+        // Remove bullet if it goes out of bounds
+        if (parseFloat(bullet.style.left) > gameContainer.offsetWidth) {
+            clearInterval(bulletInterval);
+            bullet.remove();
+        }
+    }, 20);
+}
+
+function updateScore() {
+    let score = parseInt(localStorage.getItem('score') || 0);
+    score += 10; // Increment score by 10 for each shadow destroyed
+    localStorage.setItem('score', score);
+    console.log(`Score: ${score}`); // Replace this with a UI update for score display
+}
+
+
+    startGame();
+
+</script>
+
+</body>
+</html>
