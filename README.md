@@ -25,7 +25,8 @@ Minimalistic but Engaging Graphics: Clean and visually appealing 2D graphics tha
 •Be cautious of shadows and find your way through the maze, solving light-based puzzles along the way. 🌑🔦
 
 •Complete each level to unlock the next, and face even greater challenges! 🎯
-Demo ✨ Explore the live demo: Play Live ([https://ganpat-mallah.github.io/Shadow-escape /])
+
+Demo ✨ Explore the live demo: Play Live [https://ganpat-mallah.github.io/Shadow-game/]
 
 💻 Tech Stack:
 
